@@ -1,15 +1,15 @@
 {
-  "name": "football-studio-100-automatico-real",
-  "version": "1.0-final",
-  "description": "Football Studio com chave anon real",
-  "main": "server-football-studio-CHAVE-REAL.js",
+  "name": "football-studio-vander",
+  "version": "1.0.0",
+  "description": "Football Studio Vander - 100% real",
+  "main": "server-football-studio-vander.js",
+  "type": "module",
   "scripts": {
-    "start": "node server-football-studio-CHAVE-REAL.js"
+    "start": "node server-football-studio-vander.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-fetch": "^3.3.2"
+    "cors": "^2.8.5"
   },
   "engines": {
     "node": ">=18.0.0"
