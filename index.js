@@ -2,11 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ulzvxigcdcwbyfnpewjc.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsenZ4aWdjZGN3YnlmbnBld2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMTk1NzcsImV4cCI6MjEwMzY5NTU3N30.dxjQdE0uLsy1sKt8kL6xfBhqXyBb-dKW-UB_ikDOXx8';
-let SUPABASE_AUTH_TOKEN = process.env.SUPABASE_AUTH_TOKEN || 'eyJhbGciOiJFUzI1NiIsImtpZCI6ImRkZmZhM2QzLTEyYmItNGZjZi1hZGIxLTJjNGNiMTgxNzNlZCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3VsenZ4aWdjZGN3YnlmbnBld2pjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZDExNDMxYi01NzRmLTQwMmEtODIyYi0yZjQ1YzE2NzMwMmQiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzkwNDI5NTAwLCJpYXQiOjE3OTA0MjU5MDAsImVtYWlsIjoic2FudGFyb3NhdmFuZGVyQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJzYW50YXJvc2F2YW5kZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IlZhbmRlciBOYXNjaW1lbnRvIFNhbnRhIFJvc2EiLCJwaG9uZSI6IiszNTE5Mjk0NDY0MjkiLCJwaG9uZV9jb3VudHJ5X2NvZGUiOiIrMzUxIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJyZWZlcnJhbF9jb2RlIjoid3BwIiwic3ViIjoiM2QxMTQzMWItNTc0Zi00MDJhLTgyMmItMmY0NWMxNjczMDJkIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODk5OTY2MTV9XSwic2Vzc2lvbl9pZCI6Ijc5MjVkMTA2LWI1NzQtNDAwNi1iNmM3LTg0NDFjYzU0MWY4OCIsImlzX2Fub255bW91cyI6ZmFsc2V9.TJef0QdVhjkcaEiEKci95bARRFPUlkqwlWKQfsYNuqkjK5ge4FGzjpCJx3RDv3JOxhyXGvB0-RcA8xAU__b6EA';
-const SITE_USER = process.env.SITE_USER || 'santarosavander@gmail.com';
-const SITE_PASS = process.env.SITE_PASS || '131619jV*';
+const SUPABASE_URL = 'https://ulzvxigcdcwbyfnpewjc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsenZ4aWdjZGN3YnlmbnBld2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMTk1NzcsImV4cCI6MjEwMzY5NTU3N30.dxjQdE0uLsy1sKt8kL6xfBhqXyBb-dKW-UB_ikDOXx8';
+let SUPABASE_AUTH_TOKEN = 'eyJhbGciOiJFUzI1NiIsImtpZCI6ImRkZmZhM2QzLTEyYmItNGZjZi1hZGIxLTJjNGNiMTgxNzNlZCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3VsenZ4aWdjZGN3YnlmbnBld2pjLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZDExNDMxYi01NzRmLTQwMmEtODIyYi0yZjQ1YzE2NzMwMmQiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzkwNDI5NTAwLCJpYXQiOjE3OTA0MjU5MDAsImVtYWlsIjoic2FudGFyb3NhdmFuZGVyQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJzYW50YXJvc2F2YW5kZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IlZhbmRlciBOYXNjaW1lbnRvIFNhbnRhIFJvc2EiLCJwaG9uZSI6IiszNTE5Mjk0NDY0MjkiLCJwaG9uZV9jb3VudHJ5X2NvZGUiOiIrMzUxIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJyZWZlcnJhbF9jb2RlIjoid3BwIiwic3ViIjoiM2QxMTQzMWItNTc0Zi00MDJhLTgyMmItMmY0NWMxNjczMDJkIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODk5OTY2MTV9XSwic2Vzc2lvbl9pZCI6Ijc5MjVkMTA2LWI1NzQtNDAwNi1iNmM3LTg0NDFjYzU0MWY4OCIsImlzX2Fub255bW91cyI6ZmFsc2V9.TJef0QdVhjkcaEiEKci95bARRFPUlkqwlWKQfsYNuqkjK5ge4FGzjpCJx3RDv3JOxhyXGvB0-RcA8xAU__b6EA';
+const SITE_USER = 'santarosavander@gmail.com';
+const SITE_PASS = '131619jV*';
 
 const app = express();
 app.use(cors());
@@ -14,95 +14,255 @@ app.use(express.json());
 
 let history = [];
 let stats = { HOME:0, AWAY:0, TIE:0 };
-let botStatus = 'Iniciando...';
-let lastUpdate = null;
+let botStatus = 'Conectando ao Joker...';
 let lastError = '';
+let isCollecting = false;
 
 function loadHistory(){
   try{
     if(fs.existsSync('./token.json')){
-      const tj = JSON.parse(fs.readFileSync('./token.json','utf8'));
+      const tj=JSON.parse(fs.readFileSync('./token.json','utf8'));
       if(tj.token) SUPABASE_AUTH_TOKEN = tj.token;
     }
     if(fs.existsSync('./history.json')){
       const d=JSON.parse(fs.readFileSync('./history.json','utf8'));
-      history=d; stats={HOME:0,AWAY:0,TIE:0};
+      history=d.slice(0,200); stats={HOME:0,AWAY:0,TIE:0};
       d.forEach(h=>{ if(stats[h.winner]!==undefined) stats[h.winner]++; });
     }
   }catch(e){}
 }
-function saveHistory(){ try{ fs.writeFileSync('./history.json', JSON.stringify(history.slice(0,5000))); }catch(e){} }
-function addResult(winner, row){
+function saveHistory(){ try{ fs.writeFileSync('./history.json', JSON.stringify(history.slice(0,200))); }catch(e){} }
+function addResult(w,row){
   if(history[0]?.round_id && row?.id && history[0].round_id===row.id) return false;
-  const entry={ round_id: row.id, round: row.round_number || history.length+1, winner: winner.toUpperCase(), timestamp: new Date().toISOString(), time: new Date().toLocaleTimeString('pt-BR'), created_at: row.created_at };
-  history.unshift(entry); if(history.length>5000) history.pop(); stats[entry.winner]=(stats[entry.winner]||0)+1; lastUpdate=entry.timestamp; saveHistory(); console.log('[REAL] '+entry.winner); return true;
+  const e={ round_id: row.id, winner: w.toUpperCase(), time: new Date().toLocaleTimeString('pt-BR'), ts: Date.now() };
+  history.unshift(e); if(history.length>200) history.pop(); stats[e.winner]=(stats[e.winner]||0)+1; saveHistory(); return true;
+}
+
+async function refreshTokenAuto(){
+  try{
+    botStatus = '🔄 Renovando token automaticamente...';
+    const res=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{
+      method:'POST',
+      headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({email:SITE_USER,password:SITE_PASS})
+    });
+    const data=await res.json();
+    if(data.access_token){
+      SUPABASE_AUTH_TOKEN=data.access_token;
+      fs.writeFileSync('./token.json', JSON.stringify({token:data.access_token, time:new Date().toISOString()}));
+      botStatus='✅ Token renovado automaticamente';
+      return true;
+    } else {
+      botStatus='Erro ao renovar token';
+      return false;
+    }
+  }catch(e){ lastError=e.message; return false; }
 }
 
 async function fetchReal(){
+  if(isCollecting) return;
+  isCollecting=true;
   try{
-    if(!SUPABASE_AUTH_TOKEN){ botStatus='SEM TOKEN - Clique no botão abaixo para logar'; return false; }
     let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
     let res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?order=created_at.desc&limit=200',{headers});
     if(!res.ok){
-      lastError=await res.text(); botStatus='Erro Supabase: '+res.status+' - Token expirado, clique no botão RENOVAR abaixo';
-      console.log('[ERRO] '+res.status+' '+lastError.slice(0,200));
-      return false;
+      const txt=await res.text();
+      lastError=res.status+' '+txt.slice(0,150);
+      if(res.status===401){
+        const ok=await refreshTokenAuto();
+        if(ok){
+          headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
+          res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?order=created_at.desc&limit=200',{headers});
+          if(!res.ok){ lastError=await res.text(); botStatus='Erro após renovar: '+res.status; isCollecting=false; return false; }
+        } else { botStatus='Token expirado, tentando em 10s'; isCollecting=false; return false; }
+      } else { botStatus='Erro Supabase: '+res.status; isCollecting=false; return false; }
     }
     const data=await res.json();
-    if(!Array.isArray(data)||data.length===0){ botStatus='Conectado mas sem dados'; return false; }
-    let newCount=0; for(let i=data.length-1;i>=0;i--){ const row=data[i]; const w=(row.winner||'').toString().toUpperCase(); if(!['HOME','AWAY','TIE'].includes(w)) continue; if(!history.find(h=>h.round_id===row.id)){ if(addResult(w,row)) newCount++; } }
-    botStatus='✅ REAL - '+history.length+' rodadas'+(newCount?(' - '+newCount+' novas'):'');
+    if(!Array.isArray(data)||data.length===0){ botStatus='Aguardando dados do Joker...'; isCollecting=false; return false; }
+    let newCount=0;
+    for(let j=data.length-1;j>=0;j--){
+      const row=data[j]; const w=(row.winner||'').toString().toUpperCase();
+      if(!['HOME','AWAY','TIE'].includes(w)) continue;
+      if(!history.find(h=>h.round_id===row.id)){ if(addResult(w,row)) newCount++; }
+    }
+    botStatus='✅ LIVE - Conectado ao Joker - '+history.length+' resultados';
+    isCollecting=false;
     return true;
-  }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; return false; }
+  }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
 }
 
-async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 8000); }
+async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 5000); setInterval(refreshTokenAuto, 1000*60*30); }
 
-app.post('/api/set-token', (req,res)=>{
-  const t=req.body.token; if(!t||t.length<100) return res.json({success:false});
-  SUPABASE_AUTH_TOKEN=t; try{ fs.writeFileSync('./token.json', JSON.stringify({token:t, time:new Date().toISOString()})); }catch(e){}
-  botStatus='Token atualizado! Coletando...'; fetchReal();
-  res.json({success:true});
-});
+app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
+app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 
-app.get('/', (req,res)=>{
+app.get('/',(req,res)=>{
   const total=history.length;
   const homePct=total?((stats.HOME/total)*100).toFixed(1):0;
   const awayPct=total?((stats.AWAY/total)*100).toFixed(1):0;
   const tiePct=total?((stats.TIE/total)*100).toFixed(1):0;
-  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MEU PLACAR REAL</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#05080f;color:#e2e8f0;font-family:Inter,Arial;padding:12px}.header{background:linear-gradient(135deg,#111827,#1f2937);border:1px solid #2d3748;padding:16px;border-radius:16px;margin-bottom:12px}.btn{background:#10b981;color:#000;border:0;padding:12px 20px;border-radius:10px;font-weight:800;cursor:pointer;width:100%;margin:10px 0}.btn2{background:#3b82f6;color:#fff}.card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:14px;text-align:center}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.HOME{color:#ef4444}.AWAY{color:#3b82f6}.TIE{color:#eab308}.placar{background:#111827;border:1px solid #1f2937;border-radius:16px;padding:14px;margin-bottom:12px}.bolas{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.bola{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;border:2px solid}.bola.HOME{background:#ef44441f;color:#ef4444;border-color:#ef4444}.bola.AWAY{background:#3b82f61f;color:#3b82f6;border-color:#3b82f6}.bola.TIE{background:#eab3081f;color:#eab308;border-color:#eab308}.chart-box{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:14px;margin-bottom:12px}table{width:100%;border-collapse:collapse}th{font-size:10px;color:#64748b;text-transform:uppercase;padding:8px;text-align:left;border-bottom:1px solid #1f2937}td{padding:8px;font-size:13px;border-bottom:1px solid #1f2937}</style></head><body>
-<div class="header"><h1>🎰 MEU PLACAR - JOKERIA REAL</h1><p style="color:#10b981;font-size:13px;margin-top:6px">\${botStatus}</p><p style="color:#64748b;font-size:11px">Erro: \${lastError.slice(0,100)}</p>
-<div id="loginBox" style="background:#0a0e1a;border:1px solid #1f2937;padding:12px;border-radius:10px;margin-top:12px">
-<p style="font-size:12px;color:#eab308;margin-bottom:8px">⚠️ Token expirado (401) - Clique para renovar automático:</p>
-<button class="btn" onclick="renovar()">🔄 RENOVAR TOKEN AUTOMÁTICO (1 clique)</button>
-<p style="font-size:11px;color:#64748b;margin-top:8px">Isso usa seu login ${SITE_USER} para pegar token novo direto no navegador, sem ir no Render</p>
-<div id="msg" style="margin-top:8px;font-size:12px;color:#94a3b8"></div>
+  const lastWinner = history[0]?.winner || '-';
+  const streak = (()=>{ let c=0,t=history[0]?.winner; for(let h of history){ if(h.winner===t) c++; else break; } return {type:t||'-',count:c}; })();
+
+  const bolas = history.map(h=>{
+    const cls = h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
+    const letter = h.winner==='HOME'?'H':h.winner==='AWAY'?'A':'T';
+    return '<div class="ball '+cls+'" title="'+h.time+'">'+letter+'</div>';
+  }).join('');
+
+  const linhas = history.map((h,i)=>{
+    const bg = h.winner==='HOME'?'rgba(239,68,68,0.15)':h.winner==='AWAY'?'rgba(59,130,246,0.15)':'rgba(234,179,8,0.15)';
+    const col = h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308';
+    const dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:8px"></span>';
+    return '<tr><td style="color:#64748b">#'+(total-i)+'</td><td>'+dot+'<span style="background:'+bg+';color:'+col+';padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px">'+h.winner+'</span></td><td style="color:#94a3b8;font-size:13px">'+h.time+'</td><td><span style="color:#10b981;font-size:11px">JOKER REAL</span></td></tr>';
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vander Placar - Ao Vivo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Outfit',system-ui} .mono{font-family:'JetBrains Mono',monospace}
+body{background:#060a14;color:#e2e8f0;min-height:100vh}
+.glass{background:rgba(17,24,39,0.8);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06)}
+.card-hover{transition:all 0.3s ease} .card-hover:hover{transform:translateY(-2px);border-color:rgba(16,185,129,0.3);box-shadow:0 20px 40px rgba(0,0,0,0.4)}
+.ball{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;transition:all 0.2s;cursor:pointer;border:2px solid;animation:pop 0.3s ease}
+@keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+.ball.home{background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(239,68,68,0.05));color:#ef4444;border-color:rgba(239,68,68,0.5);box-shadow:0 0 15px rgba(239,68,68,0.2)}
+.ball.away{background:linear-gradient(135deg,rgba(59,130,246,0.2),rgba(59,130,246,0.05));color:#3b82f6;border-color:rgba(59,130,246,0.5);box-shadow:0 0 15px rgba(59,130,246,0.2)}
+.ball.tie{background:linear-gradient(135deg,rgba(234,179,8,0.2),rgba(234,179,8,0.05));color:#eab308;border-color:rgba(234,179,8,0.5);box-shadow:0 0 15px rgba(234,179,8,0.2)}
+.live-dot{width:10px;height:10px;background:#10b981;border-radius:50%;animation:pulse 1.5s infinite;box-shadow:0 0 0 0 #10b981}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7)}70%{box-shadow:0 0 0 10px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.gradient-text{background:linear-gradient(90deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+</style>
+</head><body class="p-3 md:p-6">
+<div class="max-w-7xl mx-auto">
+  <div class="glass rounded-[20px] p-5 md:p-7 mb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-black font-black text-xl">V</div>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black tracking-tight">VANDER <span class="gradient-text">PLACAR</span></h1>
+        <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold mt-1">FOOTBALL STUDIO • AO VIVO • JOKER REAL</p>
+        <p class="text-[12px] text-emerald-400 mt-1 font-semibold" id="statusText">${botStatus}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-6">
+      <div class="text-right">
+        <div class="flex items-center gap-2 justify-end"><div class="live-dot"></div><span class="text-emerald-400 font-black text-[11px] tracking-widest">LIVE</span></div>
+        <div class="text-[11px] text-zinc-500 mt-1">Streak: <span class="text-white font-bold">${streak.type} x${streak.count}</span></div>
+        <div class="text-[10px] text-zinc-600 mt-1">Último: <span class="mono text-white">${lastWinner}</span></div>
+      </div>
+      <div class="hidden md:block w-px h-12 bg-white/10"></div>
+      <div class="text-right hidden md:block">
+        <div class="text-[10px] text-zinc-500">FONTE</div>
+        <div class="text-[12px] font-bold text-white">jokeria.app</div>
+        <div class="text-[10px] text-emerald-400">24h • Auto-renew</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5">
+    <div class="glass rounded-2xl p-5 card-hover">
+      <div class="flex justify-between items-start mb-3"><span class="text-[10px] tracking-widest text-zinc-500 font-bold">TOTAL REAL</span><span class="text-[10px] bg-white/10 px-2 py-1 rounded-full">200 max</span></div>
+      <div class="text-4xl font-black mono">${total}</div>
+      <div class="text-[11px] text-zinc-500 mt-2">Resultados do Joker</div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-red-500/50">
+      <div class="text-[10px] tracking-widest text-red-400 font-bold mb-3">HOME • VERMELHO</div>
+      <div class="text-3xl font-black mono text-red-400">${stats.HOME||0} <span class="text-[14px] text-zinc-500">${homePct}%</span></div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-blue-500/50">
+      <div class="text-[10px] tracking-widest text-blue-400 font-bold mb-3">AWAY • AZUL</div>
+      <div class="text-3xl font-black mono text-blue-400">${stats.AWAY||0} <span class="text-[14px] text-zinc-500">${awayPct}%</span></div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-amber-400/50">
+      <div class="text-[10px] tracking-widest text-amber-400 font-bold mb-3">TIE • AMARELO</div>
+      <div class="text-3xl font-black mono text-amber-400">${stats.TIE||0} <span class="text-[14px] text-zinc-500">${tiePct}%</span></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+    <div class="lg:col-span-2 glass rounded-[20px] p-5 md:p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="text-[11px] tracking-[0.2em] text-zinc-400 font-black">PLACAR GRANDE • ÚLTIMOS 200 • REAL TIME</h2>
+        <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full font-bold">AUTO-UPDATE 5s</span>
+      </div>
+      <div class="flex flex-wrap gap-2 justify-center min-h-[120px]" id="placarBolas">
+        ${bolas || '<div class="text-zinc-600 py-10">Aguardando dados reais do Joker...</div>'}
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="glass rounded-[20px] p-5">
+        <h3 class="text-[10px] tracking-widest text-zinc-500 font-bold mb-4">DISTRIBUIÇÃO</h3>
+        <canvas id="distChart" height="180"></canvas>
+      </div>
+      <div class="glass rounded-[20px] p-5">
+        <h3 class="text-[10px] tracking-widest text-zinc-500 font-bold mb-4">TIMELINE 50</h3>
+        <canvas id="timelineChart" height="160"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass rounded-[20px] p-5 md:p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="text-[11px] tracking-[0.2em] text-zinc-400 font-black">HISTÓRICO REAL • JOKER • ÚLTIMOS 200</h2>
+      <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full">Auto-renew ON • Sem botão</span>
+    </div>
+    <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+      <table class="w-full"><thead class="sticky top-0 bg-[#0e1422]/90 backdrop-blur"><tr><th class="text-left p-3 text-[10px] text-zinc-500">#</th><th class="text-left p-3 text-[10px] text-zinc-500">RESULTADO</th><th class="text-left p-3 text-[10px] text-zinc-500">HORA</th><th class="text-left p-3 text-[10px] text-zinc-500">FONTE</th></tr></thead><tbody id="tabelaBody">${linhas || '<tr><td colspan=4 class="text-center py-10 text-zinc-600">Conectando ao banco REAL do Joker...</td></tr>'}</tbody></table>
+    </div>
+  </div>
 </div>
-</div>
-<div class="grid"><div class="card"><h3 style="font-size:11px;color:#94a3b8">TOTAL REAL</h3><div style="font-size:26px;font-weight:800">\${total}</div></div><div class="card"><h3 class="HOME">HOME</h3><div style="font-size:22px;font-weight:800" class="HOME">\${stats.HOME||0} \${homePct}%</div></div><div class="card"><h3 class="AWAY">AWAY</h3><div style="font-size:22px;font-weight:800" class="AWAY">\${stats.AWAY||0} \${awayPct}%</div></div><div class="card"><h3 class="TIE">TIE</h3><div style="font-size:22px;font-weight:800" class="TIE">\${stats.TIE||0} \${tiePct}%</div></div></div>
-<div class="placar"><h3 style="font-size:12px;color:#94a3b8;margin-bottom:10px">PLACAR GRANDE - Últimas 100</h3><div class="bolas">\${history.slice(0,100).map(h=>\`<div class="bola \${h.winner}">\${h.winner[0]}</div>\`).join('')||'Aguardando dados...'}</div></div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="chart-box"><canvas id="d" height="180"></canvas></div><div class="chart-box"><canvas id="t" height="180"></canvas></div></div>
-<div class="placar"><table><thead><tr><th>#</th><th>Resultado</th><th>Hora</th></tr></thead><tbody>\${history.slice(0,50).map((h,i)=>\`<tr><td>#\${history.length-i}</td><td><span style="background:\${h.winner==='HOME'?'#ef44441f':h.winner==='AWAY'?'#3b82f61f':'#eab3081f'};color:\${h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308'};padding:3px 8px;border-radius:10px;font-weight:700">\${h.winner}</span></td><td>\${h.time}</td></tr>\`).join('')}</tbody></table></div>
+
 <script>
-async function renovar(){
-  document.getElementById('msg').innerText='Renovando...';
+let chart1, chart2;
+async function loadData(){
   try{
-    const res=await fetch('https://ulzvxigcdcwbyfnpewjc.supabase.co/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':'${SUPABASE_ANON_KEY}','Content-Type':'application/json'},body:JSON.stringify({email:'${SITE_USER}',password:'${SITE_PASS}'})});
-    const data=await res.json();
-    if(!data.access_token){ document.getElementById('msg').innerText='Erro login: '+JSON.stringify(data).slice(0,200); return; }
-    const r2=await fetch('/api/set-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:data.access_token})});
-    const j2=await r2.json();
-    if(j2.success){ document.getElementById('msg').innerText='✅ Token renovado! Recarregando...'; setTimeout(()=>location.reload(),1500); }
-    else document.getElementById('msg').innerText='Erro ao salvar';
-  }catch(e){ document.getElementById('msg').innerText='Erro: '+e.message; }
+    const [rStats, rRounds] = await Promise.all([fetch('/api/stats').then(r=>r.json()), fetch('/api/rounds').then(r=>r.json())]);
+    document.getElementById('statusText').innerText = rStats.botStatus || 'Conectado';
+    const bolas = rRounds.data.map(h=>{
+      const cls = h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
+      const letter = h.winner==='HOME'?'H':h.winner==='AWAY'?'A':'T';
+      return '<div class="ball '+cls+'" title="'+h.time+'">'+letter+'</div>';
+    }).join('');
+    document.getElementById('placarBolas').innerHTML = bolas || '<div class="text-zinc-600 py-10">Aguardando...</div>';
+    const linhas = rRounds.data.map((h,i)=>{
+      const bg = h.winner==='HOME'?'rgba(239,68,68,0.15)':h.winner==='AWAY'?'rgba(59,130,246,0.15)':'rgba(234,179,8,0.15)';
+      const col = h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308';
+      const dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:8px"></span>';
+      return '<tr><td style="color:#64748b">#'+(rRounds.data.length-i)+'</td><td>'+dot+'<span style="background:'+bg+';color:'+col+';padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px">'+h.winner+'</span></td><td style="color:#94a3b8;font-size:13px">'+h.time+'</td><td><span style="color:#10b981;font-size:11px">JOKER REAL</span></td></tr>';
+    }).join('');
+    document.getElementById('tabelaBody').innerHTML = linhas;
+    const s = rStats.stats || {HOME:0,AWAY:0,TIE:0};
+    if(chart1) chart1.destroy();
+    chart1 = new Chart(document.getElementById('distChart'), {
+      type:'doughnut',
+      data:{ labels:['HOME','AWAY','TIE'], datasets:[{ data:[s.HOME,s.AWAY,s.TIE], backgroundColor:['#ef4444','#3b82f6','#eab308'], borderWidth:0 }] },
+      options:{ plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}, cutout:'65%' }
+    });
+    const last50 = rRounds.data.slice(0,50).reverse();
+    if(chart2) chart2.destroy();
+    chart2 = new Chart(document.getElementById('timelineChart'), {
+      type:'bar',
+      data:{
+        labels:last50.map((_,i)=>i+1),
+        datasets:[{ data:last50.map(r=>r.winner==='HOME'?2:r.winner==='AWAY'?1:0.5), backgroundColor:last50.map(r=>r.winner==='HOME'?'#ef4444':r.winner==='AWAY'?'#3b82f6':'#eab308'), borderRadius:4 }]
+      },
+      options:{ plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} }
+    });
+  }catch(e){}
 }
-fetch('/api/stats').then(r=>r.json()).then(d=>{ new Chart(document.getElementById('d'),{type:'doughnut',data:{labels:['HOME','AWAY','TIE'],datasets:[{data:[d.stats.HOME||0,d.stats.AWAY||0,d.stats.TIE||0],backgroundColor:['#ef4444','#3b82f6','#eab308']}]}}); });
-fetch('/api/rounds').then(r=>r.json()).then(res=>{ const last50=res.data.slice(0,50).reverse(); new Chart(document.getElementById('t'),{type:'bar',data:{labels:last50.map((_,i)=>i+1),datasets:[{data:last50.map(h=>h.winner==='HOME'?1:h.winner==='AWAY'?2:3),backgroundColor:last50.map(h=>h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308')}]},options:{plugins:{legend:{display:false}},scales:{y:{display:false},x:{display:false}}}}); });
-setTimeout(()=>location.reload(),20000);
+loadData();
+setInterval(loadData, 5000);
 </script>
-</body></html>`);
+</body></html>`;
+
+  res.send(html);
 });
-app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,lastUpdate,botStatus,data:history, error:lastError}));
-app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,lastUpdate,botStatus,error:lastError}));
+
+app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
+app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>{ console.log('🚀 REAL na porta '+PORT); start(); });
+app.listen(PORT,()=>{ console.log('🚀 VANDER PLACAR na porta '+PORT); start(); });
