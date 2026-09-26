@@ -16,17 +16,7 @@ let history = [];
 let stats = { HOME:0, AWAY:0, TIE:0 };
 let botStatus = 'Conectando ao Joker...';
 let lastError = '';
-
-function normalizeWinner(raw){
-  const s = (raw||'').toString().trim().toUpperCase();
-  if(['HOME','H','CASA','1','RED'].includes(s)) return 'HOME';
-  if(['AWAY','A','FORA','2','BLUE'].includes(s)) return 'AWAY';
-  if(['TIE','T','EMPATE','DRAW','X','0'].includes(s)) return 'TIE';
-  if(s.includes('HOME')) return 'HOME';
-  if(s.includes('AWAY')) return 'AWAY';
-  if(s.includes('TIE')) return 'TIE';
-  return null;
-}
+let isCollecting = false;
 
 function loadHistory(){
   try{
@@ -36,23 +26,21 @@ function loadHistory(){
     }
     if(fs.existsSync('./history.json')){
       const d=JSON.parse(fs.readFileSync('./history.json','utf8'));
-      history=d.slice(0,200); stats={HOME:0,AWAY:0,TIE:0};
+      history=d.slice(0,400); stats={HOME:0,AWAY:0,TIE:0};
       d.forEach(h=>{ if(stats[h.winner]!==undefined) stats[h.winner]++; });
     }
   }catch(e){}
 }
-function saveHistory(){ try{ fs.writeFileSync('./history.json', JSON.stringify(history.slice(0,200))); }catch(e){} }
-
+function saveHistory(){ try{ fs.writeFileSync('./history.json', JSON.stringify(history.slice(0,400))); }catch(e){} }
 function addResult(w,row){
-  const norm = normalizeWinner(w);
-  if(!norm) return false;
   if(history[0]?.round_id && row?.id && history[0].round_id===row.id) return false;
-  const e={ round_id: row.id, winner: norm, time: new Date().toLocaleTimeString('pt-BR') };
-  history.unshift(e); if(history.length>200) history.pop(); stats[norm]=(stats[norm]||0)+1; saveHistory(); return true;
+  const e={ round_id: row.id, winner: w.toUpperCase(), time: new Date().toLocaleTimeString('pt-BR'), ts: Date.now() };
+  history.unshift(e); if(history.length>400) history.pop(); stats[e.winner]=(stats[e.winner]||0)+1; saveHistory(); return true;
 }
 
 async function refreshTokenAuto(){
   try{
+    botStatus = '🔄 Renovando token automaticamente...';
     const res=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{
       method:'POST',
       headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
@@ -61,34 +49,78 @@ async function refreshTokenAuto(){
     const data=await res.json();
     if(data.access_token){
       SUPABASE_AUTH_TOKEN=data.access_token;
-      fs.writeFileSync('./token.json', JSON.stringify({token:data.access_token}));
+      fs.writeFileSync('./token.json', JSON.stringify({token:data.access_token, time:new Date().toISOString()}));
+      botStatus='✅ Token renovado automaticamente';
       return true;
+    } else {
+      botStatus='Erro ao renovar token';
+      return false;
     }
-    return false;
-  }catch(e){ return false; }
+  }catch(e){ lastError=e.message; return false; }
+}
+
+function normalizeWinner(raw){
+  const s = (raw||'').toString().trim().toUpperCase();
+  if(['HOME','H','CASA','1','RED'].includes(s)) return 'HOME';
+  if(['AWAY','A','FORA','2','BLUE'].includes(s)) return 'AWAY';
+  if(['TIE','T','EMPATE','0','X'].includes(s)) return 'TIE';
+  if(s.includes('HOME')) return 'HOME';
+  if(s.includes('AWAY')) return 'AWAY';
+  if(s.includes('TIE')) return 'TIE';
+  return null;
+}
+
+async function tryFetchTable(table){
+  try{
+    let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
+    // tenta com filtro de data igual Joker, mas pega 400
+    const since = new Date(Date.now()-24*60*60*1000).toISOString();
+    let url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=400';
+    let res=await fetch(url,{headers});
+    if(!res.ok && res.status===401){
+      const ok=await refreshTokenAuto();
+      if(ok){
+        headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
+        res=await fetch(url,{headers});
+      }
+    }
+    if(res.ok){
+      const data=await res.json();
+      if(Array.isArray(data) && data.length>0) return data;
+    }
+    // fallback sem filtro de data pra pegar HOME e AWAY antigos também
+    url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=400';
+    res=await fetch(url,{headers});
+    if(res.ok){
+      const d2=await res.json();
+      if(Array.isArray(d2) && d2.length>0) return d2;
+    }
+    return null;
+  }catch(e){ return null; }
 }
 
 async function fetchReal(){
+  if(isCollecting) return;
+  isCollecting=true;
   try{
-    let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-    let res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=200',{headers});
-    if(!res.ok && res.status===401){
-      await refreshTokenAuto();
-      headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-      res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=200',{headers});
+    const data = await tryFetchTable('football_studio_rounds');
+    if(!data){
+      botStatus='Aguardando dados do Joker...';
+      isCollecting=false;
+      return false;
     }
-    if(!res.ok){ lastError=await res.text(); botStatus='Erro: '+res.status; return false; }
-    const data=await res.json();
-    if(!Array.isArray(data)||data.length===0){ botStatus='Aguardando dados...'; return false; }
     let newCount=0;
     for(let j=data.length-1;j>=0;j--){
-      const row=data[j];
+      const row=data[j]; 
       const raw = row.winner || row.result || row.outcome || '';
-      if(!history.find(h=>h.round_id===row.id)){ if(addResult(raw,row)) newCount++; }
+      const norm = normalizeWinner(raw);
+      if(!norm) continue;
+      if(!history.find(h=>h.round_id===row.id)){ if(addResult(norm,row)) newCount++; }
     }
-    botStatus='✅ LIVE - Vander Placar - '+history.length+' resultados'+(newCount?(' +'+newCount):'');
+    botStatus='✅ LIVE - Vander Placar - '+history.length+'/400 - '+stats.HOME+'H '+stats.AWAY+'A '+stats.TIE+'T'+(newCount?(' +'+newCount):'');
+    isCollecting=false;
     return true;
-  }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; return false; }
+  }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
 }
 
 async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 5000); setInterval(refreshTokenAuto, 1000*60*30); }
@@ -102,70 +134,169 @@ app.get('/',(req,res)=>{
   const homePct=total?((stats.HOME/total)*100).toFixed(1):0;
   const awayPct=total?((stats.AWAY/total)*100).toFixed(1):0;
   const tiePct=total?((stats.TIE/total)*100).toFixed(1):0;
+  const lastWinner = history[0]?.winner || '-';
+  const streak = (()=>{ let c=0,t=history[0]?.winner; for(let h of history){ if(h.winner===t) c++; else break; } return {type:t||'-',count:c}; })();
+
   const bolas = history.map(h=>{
     const cls = h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
     const letter = h.winner==='HOME'?'H':h.winner==='AWAY'?'A':'T';
-    return '<div class="ball '+cls+'">'+letter+'</div>';
+    return '<div class="ball '+cls+'" title="'+h.time+'">'+letter+'</div>';
   }).join('');
+
   const linhas = history.map((h,i)=>{
+    const bg = h.winner==='HOME'?'rgba(239,68,68,0.15)':h.winner==='AWAY'?'rgba(59,130,246,0.15)':'rgba(234,179,8,0.15)';
     const col = h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308';
-    return '<tr><td>#'+(total-i)+'</td><td><span style="color:'+col+';font-weight:700">'+h.winner+'</span></td><td>'+h.time+'</td></tr>';
+    const dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:8px"></span>';
+    return '<tr><td style="color:#64748b">#'+(total-i)+'</td><td>'+dot+'<span style="background:'+bg+';color:'+col+';padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px">'+h.winner+'</span></td><td style="color:#94a3b8;font-size:13px">'+h.time+'</td><td><span style="color:#10b981;font-size:11px">JOKER REAL</span></td></tr>';
   }).join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Vander Placar</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vander Placar - 400 Resultados</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
-body{background:#060a14;color:#e2e8f0;font-family:system-ui;padding:12px}
-.glass{background:rgba(17,24,39,0.9);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:16px}
-.ball{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;border:2px solid}
-.ball.home{color:#ef4444;border-color:#ef4444;background:rgba(239,68,68,0.15)}
-.ball.away{color:#3b82f6;border-color:#3b82f6;background:rgba(59,130,246,0.15)}
-.ball.tie{color:#eab308;border-color:#eab308;background:rgba(234,179,8,0.15)}
-.live-dot{width:8px;height:8px;background:#10b981;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 #10b981}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
-</style></head><body>
-<div style="max-width:1100px;margin:0 auto">
-<div class="glass" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-<div><h1 style="font-size:22px;font-weight:900">VANDER <span style="color:#10b981">PLACAR</span></h1><p style="font-size:11px;color:#6b7280">FOOTBALL STUDIO • AO VIVO • JOKER REAL</p><p style="font-size:12px;color:#10b981;margin-top:4px">${botStatus}</p></div>
-<div style="text-align:right"><div><span class="live-dot"></span> <span style="color:#10b981;font-size:11px;font-weight:700">LIVE</span></div><div style="font-size:10px;color:#6b7280;margin-top:4px">Auto-renew ON</div></div>
-</div>
+*{font-family:'Outfit',system-ui} .mono{font-family:'JetBrains Mono',monospace}
+body{background:#060a14;color:#e2e8f0;min-height:100vh}
+.glass{background:rgba(17,24,39,0.8);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06)}
+.card-hover{transition:all 0.3s ease} .card-hover:hover{transform:translateY(-2px);border-color:rgba(16,185,129,0.3);box-shadow:0 20px 40px rgba(0,0,0,0.4)}
+.ball{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;transition:all 0.2s;cursor:pointer;border:2px solid;animation:pop 0.3s ease}
+@keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+.ball.home{background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(239,68,68,0.05));color:#ef4444;border-color:rgba(239,68,68,0.5);box-shadow:0 0 15px rgba(239,68,68,0.2)}
+.ball.away{background:linear-gradient(135deg,rgba(59,130,246,0.2),rgba(59,130,246,0.05));color:#3b82f6;border-color:rgba(59,130,246,0.5);box-shadow:0 0 15px rgba(59,130,246,0.2)}
+.ball.tie{background:linear-gradient(135deg,rgba(234,179,8,0.2),rgba(234,179,8,0.05));color:#eab308;border-color:rgba(234,179,8,0.5);box-shadow:0 0 15px rgba(234,179,8,0.2)}
+.live-dot{width:10px;height:10px;background:#10b981;border-radius:50%;animation:pulse 1.5s infinite;box-shadow:0 0 0 0 #10b981}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7)}70%{box-shadow:0 0 0 10px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.gradient-text{background:linear-gradient(90deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+</style>
+</head><body class="p-3 md:p-6">
+<div class="max-w-7xl mx-auto">
+  <div class="glass rounded-[20px] p-5 md:p-7 mb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-black font-black text-xl">V</div>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black tracking-tight">VANDER <span class="gradient-text">PLACAR</span></h1>
+        <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold mt-1">FOOTBALL STUDIO • AO VIVO • 400 RESULTADOS • JOKER REAL</p>
+        <p class="text-[12px] text-emerald-400 mt-1 font-semibold" id="statusText">${botStatus}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-6">
+      <div class="text-right">
+        <div class="flex items-center gap-2 justify-end"><div class="live-dot"></div><span class="text-emerald-400 font-black text-[11px] tracking-widest">LIVE</span></div>
+        <div class="text-[11px] text-zinc-500 mt-1">Streak: <span class="text-white font-bold">${streak.type} x${streak.count}</span></div>
+        <div class="text-[10px] text-zinc-600 mt-1">Último: <span class="mono text-white">${lastWinner}</span></div>
+      </div>
+      <div class="hidden md:block w-px h-12 bg-white/10"></div>
+      <div class="text-right hidden md:block">
+        <div class="text-[10px] text-zinc-500">FONTE</div>
+        <div class="text-[12px] font-bold text-white">jokeria.app</div>
+        <div class="text-[10px] text-emerald-400">400 • Auto-renew</div>
+      </div>
+    </div>
+  </div>
 
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
-<div class="glass" style="text-align:center"><div style="font-size:10px;color:#6b7280">TOTAL</div><div style="font-size:28px;font-weight:800">${total}</div></div>
-<div class="glass" style="text-align:center;border-left:2px solid #ef4444"><div style="font-size:10px;color:#ef4444">HOME</div><div style="font-size:24px;font-weight:800;color:#ef4444">${stats.HOME||0} <span style="font-size:12px;color:#6b7280">${homePct}%</span></div></div>
-<div class="glass" style="text-align:center;border-left:2px solid #3b82f6"><div style="font-size:10px;color:#3b82f6">AWAY</div><div style="font-size:24px;font-weight:800;color:#3b82f6">${stats.AWAY||0} <span style="font-size:12px;color:#6b7280">${awayPct}%</span></div></div>
-<div class="glass" style="text-align:center;border-left:2px solid #eab308"><div style="font-size:10px;color:#eab308">TIE</div><div style="font-size:24px;font-weight:800;color:#eab308">${stats.TIE||0} <span style="font-size:12px;color:#6b7280">${tiePct}%</span></div></div>
-</div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5">
+    <div class="glass rounded-2xl p-5 card-hover">
+      <div class="flex justify-between items-start mb-3"><span class="text-[10px] tracking-widest text-zinc-500 font-bold">TOTAL REAL</span><span class="text-[10px] bg-white/10 px-2 py-1 rounded-full">400 max</span></div>
+      <div class="text-4xl font-black mono">${total}</div>
+      <div class="text-[11px] text-zinc-500 mt-2">Resultados do Joker</div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-red-500/50">
+      <div class="text-[10px] tracking-widest text-red-400 font-bold mb-3">HOME • VERMELHO</div>
+      <div class="text-3xl font-black mono text-red-400">${stats.HOME||0} <span class="text-[14px] text-zinc-500">${homePct}%</span></div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-blue-500/50">
+      <div class="text-[10px] tracking-widest text-blue-400 font-bold mb-3">AWAY • AZUL</div>
+      <div class="text-3xl font-black mono text-blue-400">${stats.AWAY||0} <span class="text-[14px] text-zinc-500">${awayPct}%</span></div>
+    </div>
+    <div class="glass rounded-2xl p-5 card-hover border-l-2 border-l-amber-400/50">
+      <div class="text-[10px] tracking-widest text-amber-400 font-bold mb-3">TIE • AMARELO</div>
+      <div class="text-3xl font-black mono text-amber-400">${stats.TIE||0} <span class="text-[14px] text-zinc-500">${tiePct}%</span></div>
+    </div>
+  </div>
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px">
-<div class="glass"><h3 style="font-size:11px;color:#6b7280;margin-bottom:10px">PLACAR GRANDE • 200 • REAL TIME</h3><div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center" id="bolas">${bolas||'Aguardando...'}</div></div>
-<div class="glass"><h3 style="font-size:10px;color:#6b7280;margin-bottom:8px">DISTRIBUIÇÃO</h3><canvas id="c1" height="160"></canvas></div>
-</div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+    <div class="lg:col-span-2 glass rounded-[20px] p-5 md:p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="text-[11px] tracking-[0.2em] text-zinc-400 font-black">PLACAR GRANDE • ÚLTIMOS 400 • REAL TIME</h2>
+        <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full font-bold">AUTO-UPDATE 5s</span>
+      </div>
+      <div class="flex flex-wrap gap-2 justify-center min-h-[120px]" id="placarBolas">
+        ${bolas || '<div class="text-zinc-600 py-10">Aguardando dados reais do Joker...</div>'}
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="glass rounded-[20px] p-5">
+        <h3 class="text-[10px] tracking-widest text-zinc-500 font-bold mb-4">DISTRIBUIÇÃO</h3>
+        <canvas id="distChart" height="180"></canvas>
+      </div>
+      <div class="glass rounded-[20px] p-5">
+        <h3 class="text-[10px] tracking-widest text-zinc-500 font-bold mb-4">TIMELINE 50</h3>
+        <canvas id="timelineChart" height="160"></canvas>
+      </div>
+    </div>
+  </div>
 
-<div class="glass"><h3 style="font-size:11px;color:#6b7280;margin-bottom:10px">HISTÓRICO • 200</h3><table style="width:100%;font-size:13px"><thead><tr style="color:#6b7280;font-size:10px"><th>#</th><th>Resultado</th><th>Hora</th></tr></thead><tbody id="tbody">${linhas||'<tr><td colspan=3 style="text-align:center;padding:20px;color:#6b7280">Conectando...</td></tr>'}</tbody></table></div>
+  <div class="glass rounded-[20px] p-5 md:p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="text-[11px] tracking-[0.2em] text-zinc-400 font-black">HISTÓRICO REAL • JOKER • ÚLTIMOS 400</h2>
+      <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full">Auto-renew ON</span>
+    </div>
+    <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+      <table class="w-full"><thead class="sticky top-0 bg-[#0e1422]/90 backdrop-blur"><tr><th class="text-left p-3 text-[10px] text-zinc-500">#</th><th class="text-left p-3 text-[10px] text-zinc-500">RESULTADO</th><th class="text-left p-3 text-[10px] text-zinc-500">HORA</th><th class="text-left p-3 text-[10px] text-zinc-500">FONTE</th></tr></thead><tbody id="tabelaBody">${linhas || '<tr><td colspan=4 class="text-center py-10 text-zinc-600">Conectando ao banco REAL do Joker...</td></tr>'}</tbody></table>
+    </div>
+  </div>
 </div>
 
 <script>
-let ch;
-async function load(){
+let chart1, chart2;
+async function loadData(){
   try{
-    const [s,r]=await Promise.all([fetch('/api/stats').then(x=>x.json()), fetch('/api/rounds').then(x=>x.json())]);
-    document.getElementById('bolas').innerHTML = r.data.map(h=>{
-      const cls=h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
-      return '<div class="ball '+cls+'">'+h.winner[0]+'</div>';
-    }).join('')||'Aguardando...';
-    document.getElementById('tbody').innerHTML = r.data.map((h,i)=>'<tr><td>#'+(r.data.length-i)+'</td><td style="color:'+(h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308')+';font-weight:700">'+h.winner+'</td><td>'+h.time+'</td></tr>').join('');
-    if(ch) ch.destroy();
-    ch=new Chart(document.getElementById('c1'),{type:'doughnut',data:{labels:['HOME','AWAY','TIE'],datasets:[{data:[s.stats.HOME||0,s.stats.AWAY||0,s.stats.TIE||0],backgroundColor:['#ef4444','#3b82f6','#eab308']}]},options:{plugins:{legend:{labels:{color:'#9ca3af',font:{size:10}}}},cutout:'60%'}});
+    const [rStats, rRounds] = await Promise.all([fetch('/api/stats').then(r=>r.json()), fetch('/api/rounds').then(r=>r.json())]);
+    document.getElementById('statusText').innerText = rStats.botStatus || 'Conectado';
+    const bolas = rRounds.data.map(h=>{
+      const cls = h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
+      const letter = h.winner==='HOME'?'H':h.winner==='AWAY'?'A':'T';
+      return '<div class="ball '+cls+'" title="'+h.time+'">'+letter+'</div>';
+    }).join('');
+    document.getElementById('placarBolas').innerHTML = bolas || '<div class="text-zinc-600 py-10">Aguardando...</div>';
+    const linhas = rRounds.data.map((h,i)=>{
+      const bg = h.winner==='HOME'?'rgba(239,68,68,0.15)':h.winner==='AWAY'?'rgba(59,130,246,0.15)':'rgba(234,179,8,0.15)';
+      const col = h.winner==='HOME'?'#ef4444':h.winner==='AWAY'?'#3b82f6':'#eab308';
+      const dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:8px"></span>';
+      return '<tr><td style="color:#64748b">#'+(rRounds.data.length-i)+'</td><td>'+dot+'<span style="background:'+bg+';color:'+col+';padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px">'+h.winner+'</span></td><td style="color:#94a3b8;font-size:13px">'+h.time+'</td><td><span style="color:#10b981;font-size:11px">JOKER REAL</span></td></tr>';
+    }).join('');
+    document.getElementById('tabelaBody').innerHTML = linhas;
+    const s = rStats.stats || {HOME:0,AWAY:0,TIE:0};
+    if(chart1) chart1.destroy();
+    chart1 = new Chart(document.getElementById('distChart'), {
+      type:'doughnut',
+      data:{ labels:['HOME','AWAY','TIE'], datasets:[{ data:[s.HOME,s.AWAY,s.TIE], backgroundColor:['#ef4444','#3b82f6','#eab308'], borderWidth:0 }] },
+      options:{ plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}, cutout:'65%' }
+    });
+    const last50 = rRounds.data.slice(0,50).reverse();
+    if(chart2) chart2.destroy();
+    chart2 = new Chart(document.getElementById('timelineChart'), {
+      type:'bar',
+      data:{
+        labels:last50.map((_,i)=>i+1),
+        datasets:[{ data:last50.map(r=>r.winner==='HOME'?2:r.winner==='AWAY'?1:0.5), backgroundColor:last50.map(r=>r.winner==='HOME'?'#ef4444':r.winner==='AWAY'?'#3b82f6':'#eab308'), borderRadius:4 }]
+      },
+      options:{ plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} }
+    });
   }catch(e){}
 }
-load(); setInterval(load,5000);
+loadData();
+setInterval(loadData, 5000);
 </script>
 </body></html>`;
 
   res.send(html);
 });
 
+app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
+app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>{ console.log('VANDER PLACAR leve na porta '+PORT); start(); });
-
+app.listen(PORT,()=>{ console.log('🚀 VANDER PLACAR 400 na porta '+PORT); start(); });
+    
