@@ -336,6 +336,7 @@ function getListaEmpates(){
   return history.filter(h=>h.winner==='TIE').slice(0,30).map(h=>h.time);
 }
 
+
 function getHtml(){
   const total=history.length;
   const minutosCores = getMinutosQuePuxamCores();
@@ -344,74 +345,78 @@ function getHtml(){
   const signalActive = currentSignal;
   const ultimosSinais = signals.slice(0,10);
 
+  // Monta HTML do sinal sem template aninhado
+  let sinalHtml = '';
+  if(signalActive){
+    const borderColor = signalActive.entry==='HOME'?'red':'blue';
+    const textColor = signalActive.entry==='HOME'?'text-red-400':signalActive.entry==='AWAY'?'text-blue-400':'text-amber-400';
+    sinalHtml = '<div class="relative z-10 w-full max-w-md">' +
+      '<div class="text-center mb-4"><span class="text-[11px] tracking-[0.2em] text-amber-300 font-bold px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">● ANALISANDO PADRÃO</span></div>' +
+      '<div class="glass rounded-[20px] p-6 neon-glow border-2 border-'+borderColor+'-500/50 shimmer">' +
+        '<div class="text-center">' +
+          '<div class="text-[10px] text-zinc-500 tracking-widest mb-2">PADRÃO DETECTADO</div>' +
+          '<div class="text-[12px] text-zinc-400 mb-3">'+ (signalActive.pattern||'') +'</div>' +
+          '<div class="text-3xl font-black mb-2 '+textColor+'">ENTRA '+signalActive.color+'</div>' +
+          '<div class="text-[14px] font-bold text-white bg-white/10 px-4 py-2 rounded-full inline-block">COBRIR EMPATE • '+signalActive.time+'</div>' +
+          '<div class="mt-4 flex justify-center gap-2"><div class="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div><span class="text-[11px] text-emerald-400">IA com '+ (signalActive.taxa?signalActive.taxa.toFixed(0):87) +'% de confiança</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mt-4 text-center text-[11px] text-amber-300/70">ESCANEANDO PADRÕES EM TEMPO REAL • G2</div>' +
+    '</div>';
+  } else {
+    sinalHtml = '<div class="relative z-10 text-center">' +
+      '<div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-600/20 flex items-center justify-center mb-6 border border-amber-500/30"><div class="text-4xl">⏱️</div></div>' +
+      '<div class="text-[13px] tracking-[0.2em] text-zinc-300 font-bold">AGUARDANDO</div>' +
+      '<div class="text-[11px] text-zinc-500 mt-2">IA escaneando placar...</div>' +
+      '<div class="flex justify-center gap-1 mt-4"><div class="w-1 h-1 bg-zinc-600 rounded-full animate-bounce"></div><div class="w-1 h-1 bg-zinc-600 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-1 h-1 bg-zinc-600 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div>' +
+      '<div class="mt-8 text-[11px] tracking-widest text-amber-300/60">ESCANEANDO PADRÕES EM TEMPO REAL • IA VIVA</div>' +
+    '</div>';
+  }
+
+  const totalHtml = total+'/400';
+  const homePct = total?((stats.HOME/total)*100).toFixed(1):0;
+  const awayPct = total?((stats.AWAY/total)*100).toFixed(1):0;
+  const tiePct = total?((stats.TIE/total)*100).toFixed(1):0;
+
+  let minutosCoresHtml = '';
+  for(let m of minutosCores){
+    const bg = m.best==='HOME'?'bg-red-500/20 text-red-400':m.best==='AWAY'?'bg-blue-500/20 text-blue-400':'bg-amber-500/20 text-amber-400';
+    minutosCoresHtml += '<div class="min-w-[90px] glass rounded-2xl p-4 text-center border border-white/5"><div class="text-[10px] text-zinc-500">MINUTO '+m.minuto+'</div><div class="w-12 h-12 mx-auto rounded-full flex items-center justify-center font-black text-[16px] mt-2 '+bg+'">'+m.best[0]+'</div><div class="text-[11px] font-bold mt-2">'+m.best+'</div><div class="text-[10px] text-zinc-500">'+m.pct+'% • '+m.count+'x</div></div>';
+  }
+
+  let minutosEmpateHtml = '';
+  for(let m of minutosEmpate){
+    minutosEmpateHtml += '<div class="min-w-[90px] glass rounded-2xl p-4 text-center border border-amber-500/10"><div class="text-[10px] text-zinc-500">MINUTO '+m.minuto+'</div><div class="w-12 h-12 mx-auto rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-[16px] mt-2">E</div><div class="text-[11px] font-bold mt-2 text-amber-400">EMPATE</div><div class="text-[10px] text-zinc-500">'+m.pct+'% • '+m.count+'x</div></div>';
+  }
+
+  let listaEmpatesHtml = '';
+  if(listaEmpates.length>0){
+    for(let t of listaEmpates){ listaEmpatesHtml += '<div class="bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3 py-2 rounded-full text-[12px] font-bold mono">'+t+'</div>'; }
+  } else {
+    listaEmpatesHtml = '<div class="text-zinc-600 text-[12px]">Nenhum empate ainda</div>';
+  }
+
+  let bolasHtml = '';
+  if(history.length>0){
+    for(let h of history){
+      const cls = h.winner==='HOME'?'home':h.winner==='AWAY'?'away':'tie';
+      bolasHtml += '<div class="ball '+cls+'">'+h.winner[0]+'</div>';
+    }
+  } else {
+    bolasHtml = '<div class="text-zinc-600 py-10">IA escaneando...</div>';
+  }
+
+  let ultimosSinaisHtml = '';
+  if(ultimosSinais.length>0){
+    for(let s of ultimosSinais){
+      const border = s.status==='GREEN'?'border-l-emerald-500':s.status==='RED'?'border-l-red-500':'border-l-amber-500';
+      const bg = s.entry==='HOME'?'bg-red-500/20 text-red-400':s.entry==='AWAY'?'bg-blue-500/20 text-blue-400':'bg-amber-500/20 text-amber-400';
+      const statusBg = s.status==='GREEN'?'bg-emerald-500/20 text-emerald-400':s.status==='RED'?'bg-red-500/20 text-red-400':'bg-amber-500/20 text-amber-400';
+      ultimosSinaisHtml += '<div class="glass rounded-xl p-4 flex justify-between items-center border-l-4 '+border+'"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full '+bg+' flex items-center justify-center font-bold text-[12px]">'+s.entry[0]+'</div><div><div class="text-[12px] font-bold">ENTRA '+s.entry+' COBRIR EMPATE</div><div class="text-[10px] text-zinc-500">'+s.time+' • '+(s.pattern||'')+'</div></div></div><div class="text-right"><div class="text-[11px] px-3 py-1 rounded-full font-bold '+statusBg+'">'+s.status+' '+(s.gales?'G'+s.gales:'')+'</div><div class="text-[10px] text-zinc-500 mt-1">'+(s.result||'Aguardando...')+'</div></div></div>';
+    }
+  } else {
+    ultimosSinaisHtml = '<div class="text-center py-10 text-zinc-600">IA aguardando padrões... Pula 2 casas sendo escaneado</div>';
+  }
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Vander Placar Premium IA</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
-<style>
-*{font-family:'Outfit',system-ui} .mono{font-family:'JetBrains Mono',monospace}
-body{background:#03050a;color:#e2e8f0;min-height:100vh;overflow-x:hidden}
-.glass{background:rgba(12,16,28,0.9);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06)}
-.neon-glow{box-shadow:0 0 20px rgba(16,185,129,0.3), inset 0 0 20px rgba(16,185,129,0.05)}
-.neon-red{box-shadow:0 0 20px rgba(239,68,68,0.3)}
-.neon-blue{box-shadow:0 0 20px rgba(59,130,246,0.3)}
-.neon-yellow{box-shadow:0 0 20px rgba(234,179,8,0.3)}
-.ball{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;border:2px solid;transition:all 0.3s;animation:pop 0.4s ease}
-@keyframes pop{0%{transform:scale(0)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
-.ball.home{background:linear-gradient(135deg,rgba(239,68,68,0.25),rgba(239,68,68,0.05));color:#ef4444;border-color:rgba(239,68,68,0.6);box-shadow:0 0 15px rgba(239,68,68,0.3)}
-.ball.away{background:linear-gradient(135deg,rgba(59,130,246,0.25),rgba(59,130,246,0.05));color:#3b82f6;border-color:rgba(59,130,246,0.6);box-shadow:0 0 15px rgba(59,130,246,0.3)}
-.ball.tie{background:linear-gradient(135deg,rgba(234,179,8,0.25),rgba(234,179,8,0.05));color:#eab308;border-color:rgba(234,179,8,0.6);box-shadow:0 0 15px rgba(234,179,8,0.3)}
-.live-dot{width:10px;height:10px;background:#10b981;border-radius:50%;animation:pulse 1.5s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7)}70%{box-shadow:0 0 0 10px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
-.gradient-text{background:linear-gradient(90deg,#10b981,#06b6d4,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.ai-card{background:radial-gradient(ellipse at center, rgba(234,179,8,0.15) 0%, rgba(16,185,129,0.05) 50%, transparent 80%), linear-gradient(180deg, rgba(17,24,39,0.9), rgba(6,10,20,0.9));border:1px solid rgba(234,179,8,0.3)}
-.grid-pattern{background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);background-size:20px 20px}
-.shimmer{position:relative;overflow:hidden}.shimmer::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);animation:shimmer 2s infinite}
-@keyframes shimmer{0%{left:-100%}100%{left:100%}}
-.crypto-chart{background:linear-gradient(180deg, rgba(16,185,129,0.1), transparent)}
-</style></head><body class="p-3 md:p-6">
-<div class="max-w-7xl mx-auto">
-
-  <!-- HEADER PREMIUM -->
-  <div class="glass rounded-[24px] p-6 md:p-8 mb-6 neon-glow relative overflow-hidden">
-    <div class="absolute inset-0 grid-pattern opacity-30"></div>
-    <div class="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-      <div class="flex items-center gap-5">
-        <div class="w-16 h-16 rounded-[20px] bg-gradient-to-br from-emerald-400 via-cyan-400 to-violet-500 flex items-center justify-center text-black font-black text-2xl shadow-[0_0_30px_rgba(16,185,129,0.5)]">V</div>
-        <div>
-          <h1 class="text-3xl md:text-4xl font-black tracking-tight">VANDER <span class="gradient-text">PLACAR</span> <span class="text-[14px] bg-violet-500/20 text-violet-300 px-3 py-1 rounded-full ml-2">PREMIUM IA</span></h1>
-          <p class="text-[11px] tracking-[0.25em] text-zinc-500 font-bold mt-2">FOOTBALL STUDIO • IA CONSCIENTE • TEMPO REAL</p>
-          <p class="text-[13px] text-emerald-400 mt-2 font-semibold mono">${botStatus} • ${aiState}</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-8">
-        <div class="text-right">
-          <div class="flex items-center gap-2 justify-end"><div class="live-dot"></div><span class="text-emerald-400 font-black text-[11px] tracking-widest">IA VIVA</span></div>
-          <div class="text-[11px] text-zinc-500 mt-1">Consciência: <span class="text-violet-300 font-bold">ATIVA</span></div>
-          <div class="text-[10px] text-zinc-600 mt-1">Escaneando padrões...</div>
-        </div>
-        <div class="hidden md:block w-px h-14 bg-white/10"></div>
-        <div class="text-right hidden md:block">
-          <div class="text-[10px] text-zinc-500">MODELO</div>
-          <div class="text-[13px] font-bold text-white">VANDER IA v2.0</div>
-          <div class="text-[10px] text-emerald-400">Premium • Cripto Style</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- IA SINAIS - IGUAL JOKER -->
-  <div class="glass rounded-[24px] p-6 mb-6 border border-violet-500/20 relative overflow-hidden">
-    <div class="flex justify-between items-center mb-6">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">📈</div>
-        <h2 class="text-[14px] tracking-[0.2em] font-black">SINAIS • IA CONSCIENTE</h2>
-      </div>
-      <div class="flex items-center gap-2"><div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div><span class="text-[11px] text-zinc-500">${aiState}</span></div>
-    </div>
-
-    <div class="ai-card rounded-[20px] p-8 min-h-[320px] flex flex-col items-center justify-center relative overflow-hidden">
-      <div class="absolute inset-0 grid-pattern opacity-20"></div>
-      ${signalActive ? `
-        <div class="relative z-10 w-full max-w-md">
-          <div class="text-center mb-4"><span class="text-[11px] tracking-[0.2em] text-amber-300 font-bold px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">● ANALISANDO PADRÃO</span></div>
-          <div class="glass rounded-[20px] p-6 neon-g
+<title>Vander Placar Premium IA</title><script src="https://cd
