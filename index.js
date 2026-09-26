@@ -1,7 +1,7 @@
 import http from 'http';
 import fs from 'fs';
 
-const URL='https://ulzvxigcdcwbyfnpewjc.supabase.co';
+const SUPABASE_URL='https://ulzvxigcdcwbyfnpewjc.supabase.co';
 const A0='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.';
 const A1='[STRIPPED 127 bytes].';
 const A2='dxjQdE0uLsy1sKt8kL6xfBhqXyBb-dKW-UB_ikDOXx8';
@@ -237,7 +237,7 @@ function add(w,row){
 
 async function refresh(){
   try{
-    const url=URL+'/auth/v1/token?grant_type=password';
+    const url=SUPABASE_URL+'/auth/v1/token?grant_type=password';
     const body=JSON.stringify({email:USER,password:PASS});
     const res=await fetch(url,{
       method:'POST',
@@ -262,7 +262,7 @@ async function fetchReal(){
       'Authorization':'Bearer '+TOKEN,
       'Content-Type':'application/json'
     };
-    let url=URL+'/rest/v1/football_studio_rounds';
+    let url=SUPABASE_URL+'/rest/v1/football_studio_rounds';
     url+='?select=*&order=created_at.desc&limit=400';
     let res=await fetch(url,{headers});
     if(!res.ok && res.status===401){
@@ -479,8 +479,8 @@ const server=http.createServer(async (req,res)=>{
   if(url.pathname==='/api/raw'){
     try{
       let headers={'apikey':ANON,'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};
-      let r=await fetch(URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers});
-      if(!r.ok && r.status===401){await refresh();headers={'apikey':ANON,'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};r=await fetch(URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers});}
+      let r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers});
+      if(!r.ok && r.status===401){await refresh();headers={'apikey':ANON,'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'};r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers});}
       const data=await r.json();
       let distinct={};
       for(let row of data){const raw=row.winner||row.result||row.outcome||'NULL';distinct[raw]=(distinct[raw]||0)+1;}
