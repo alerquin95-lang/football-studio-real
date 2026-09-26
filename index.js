@@ -18,6 +18,25 @@ let botStatus = 'Conectando ao Joker...';
 let lastError = '';
 let isCollecting = false;
 
+
+function normalizeWinner(raw, row){
+  if(!raw && row){
+    if(row.home_score!=null && row.away_score!=null){
+      if(row.home_score>row.away_score) return 'HOME';
+      if(row.away_score>row.home_score) return 'AWAY';
+      return 'TIE';
+    }
+  }
+  const s = (raw||'').toString().trim().toUpperCase();
+  if(['HOME','H','CASA','MANDANTE','1','RED','VERMELHO','R'].includes(s)) return 'HOME';
+  if(['AWAY','A','FORA','VISITANTE','2','BLUE','AZUL','B'].includes(s)) return 'AWAY';
+  if(['TIE','T','EMPATE','DRAW','X','0','AMARELO','YELLOW','E'].includes(s)) return 'TIE';
+  if(s.includes('HOME')) return 'HOME';
+  if(s.includes('AWAY')) return 'AWAY';
+  if(s.includes('TIE')) return 'TIE';
+  return null;
+}
+
 function loadHistory(){
   try{
     if(fs.existsSync('./token.json')){
@@ -33,8 +52,10 @@ function loadHistory(){
 }
 function saveHistory(){ try{ fs.writeFileSync('./history.json', JSON.stringify(history.slice(0,200))); }catch(e){} }
 function addResult(w,row){
+  const norm = normalizeWinner(w,row);
+  if(!norm) return false;
   if(history[0]?.round_id && row?.id && history[0].round_id===row.id) return false;
-  const e={ round_id: row.id, winner: w.toUpperCase(), time: new Date().toLocaleTimeString('pt-BR'), ts: Date.now() };
+  const e={ round_id: row.id, winner: norm, time: new Date().toLocaleTimeString('pt-BR'), ts: Date.now() };
   history.unshift(e); if(history.length>200) history.pop(); stats[e.winner]=(stats[e.winner]||0)+1; saveHistory(); return true;
 }
 
@@ -59,59 +80,36 @@ async function refreshTokenAuto(){
   }catch(e){ lastError=e.message; return false; }
 }
 
+const CANDIDATE_TABLES = ['football_studio_rounds'];
 
-const CANDIDATE_TABLES = [
-  'football_studio_rounds',
-  'football_studio_results',
-  'football_studio',
-  'studio_rounds',
-  'studio_results',
-  'football_results',
-  'results',
-  'rounds',
-  'bacbo_rounds',
-  'bac_bo_rounds',
-  'evolution_football_studio'
-];
-
-async function tryFetchTable(table){
+async function tryFetchTable(table, withDate=true){
   try{
-    const since = new Date(Date.now()-24*60*60*1000).toISOString();
     let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-    // EXATAMENTE igual ao Joker: select=* & created_at >= ontem & order desc & limit 5000
-    let url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=5000';
+    let url;
+    if(withDate){
+      const since = new Date(Date.now()-7*24*60*60*1000).toISOString(); // 7 dias pra pegar HOME/AWAY também
+      url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=5000';
+    } else {
+      url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=5000';
+    }
     let res=await fetch(url,{headers});
     if(!res.ok){
-      const txt=await res.text();
       if(res.status===401){
         const ok=await refreshTokenAuto();
         if(ok){
           headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
           res=await fetch(url,{headers});
-          if(!res.ok){ lastError='Tabela '+table+' - '+(await res.text()).slice(0,100); return null; }
+          if(!res.ok) return null;
         } else return null;
-      } else {
-        if(res.status!==404) lastError='Tabela '+table+' - '+res.status+' '+txt.slice(0,80);
-        return null;
-      }
+      } else return null;
     }
     const data=await res.json();
     if(Array.isArray(data) && data.length>0){
-      console.log('[TABELA OK] '+table+' -> '+data.length+' registros, exemplo:', JSON.stringify(data[0]).slice(0,200));
+      console.log('[TABELA OK] '+table+' ('+(withDate?'com data':'sem data')+') -> '+data.length);
       return data;
     }
-    // tenta sem filtro de data se vazio
-    url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=200';
-    res=await fetch(url,{headers});
-    if(res.ok){
-      const d2=await res.json();
-      if(Array.isArray(d2) && d2.length>0){
-        console.log('[TABELA OK SEM FILTRO] '+table+' -> '+d2.length);
-        return d2;
-      }
-    }
     return null;
-  }catch(e){ console.log('[ERRO TABLE] '+table+' '+e.message); return null; }
+  }catch(e){ return null; }
 }
 
 async function fetchReal(){
@@ -119,35 +117,27 @@ async function fetchReal(){
   isCollecting=true;
   try{
     let data=null;
-    let usedTable=null;
-    for(let tbl of CANDIDATE_TABLES){
-      data=await tryFetchTable(tbl);
-      if(data){ usedTable=tbl; break; }
-    }
-    // se nao achou nada, tenta descobrir via /rest/v1/
+    // tenta com filtro 7 dias primeiro (igual Joker mas 7 dias pra pegar HOME/AWAY)
+    data=await tryFetchTable('football_studio_rounds', true);
+    if(!data) data=await tryFetchTable('football_studio_rounds', false);
+    
     if(!data){
-      try{
-        let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN};
-        let res=await fetch(SUPABASE_URL+'/rest/v1/',{headers});
-        if(res.ok){
-          const spec=await res.json();
-          console.log('[SPEC] Tabelas disponiveis:', Object.keys(spec.definitions||{}).slice(0,20));
-          lastError='Nenhuma tabela com dados. Spec: '+Object.keys(spec.definitions||{}).join(',').slice(0,200);
-        }
-      }catch(e){}
-      botStatus='Aguardando dados do Joker... nenhuma tabela retornou';
+      botStatus='Aguardando dados do Joker...';
       isCollecting=false;
       return false;
     }
 
     let newCount=0;
+    let distinct = {};
     for(let j=data.length-1;j>=0;j--){
       const row=data[j]; 
-      const w=(row.winner||row.result||row.outcome||'').toString().toUpperCase();
-      if(!['HOME','AWAY','TIE'].includes(w)) continue;
-      if(!history.find(h=>h.round_id===row.id)){ if(addResult(w,row)) newCount++; }
+      const raw = row.winner || row.result || row.outcome || row.winning_side || '';
+      const norm = normalizeWinner(raw, row);
+      if(norm) distinct[norm]=(distinct[norm]||0)+1;
+      if(!history.find(h=>h.round_id===row.id)){ if(addResult(raw,row)) newCount++; }
     }
-    botStatus='✅ LIVE - '+usedTable+' - '+history.length+' resultados'+(newCount?(' +'+newCount):'');
+    console.log('[DISTINCT]', distinct);
+    botStatus='✅ LIVE - '+history.length+' resultados - HOME:'+(distinct['HOME']||0)+' AWAY:'+(distinct['AWAY']||0)+' TIE:'+(distinct['TIE']||0)+(newCount?(' +'+newCount):'');
     isCollecting=false;
     return true;
   }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
@@ -157,6 +147,10 @@ async function fetchReal(){
 async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 5000); setInterval(refreshTokenAuto, 1000*60*30); }
 
 app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
+app.get('/api/clear',(req,res)=>{ try{ if(require('fs').existsSync('./history.json')) require('fs').unlinkSync('./history.json'); }catch(e){} history=[]; stats={HOME:0,AWAY:0,TIE:0}; botStatus='Histórico limpo, recarregando...'; fetchReal(); res.json({success:true, msg:'limpo'}); });
+
+app.get('/api/debug',async(req,res)=>{ try{ const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN}; const r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=5',{headers}); const d=await r.json(); res.json({raw:d}); }catch(e){ res.json({error:e.message}); } });
+
 app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 
 app.get('/',(req,res)=>{
@@ -326,6 +320,10 @@ setInterval(loadData, 5000);
 });
 
 app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
+app.get('/api/clear',(req,res)=>{ try{ if(require('fs').existsSync('./history.json')) require('fs').unlinkSync('./history.json'); }catch(e){} history=[]; stats={HOME:0,AWAY:0,TIE:0}; botStatus='Histórico limpo, recarregando...'; fetchReal(); res.json({success:true, msg:'limpo'}); });
+
+app.get('/api/debug',async(req,res)=>{ try{ const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN}; const r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=5',{headers}); const d=await r.json(); res.json({raw:d}); }catch(e){ res.json({error:e.message}); } });
+
 app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>{ console.log('🚀 VANDER PLACAR na porta '+PORT); start(); });
+app.listen(PORT,()=>{ console.log('🚀 VANDER PLA
