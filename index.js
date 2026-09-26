@@ -73,9 +73,7 @@ function normalizeWinner(raw){
 async function tryFetchTable(table){
   try{
     let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-    // tenta com filtro de data igual Joker, mas pega 400
-    const since = new Date(Date.now()-24*60*60*1000).toISOString();
-    let url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=400';
+    let url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=400';
     let res=await fetch(url,{headers});
     if(!res.ok && res.status===401){
       const ok=await refreshTokenAuto();
@@ -87,13 +85,6 @@ async function tryFetchTable(table){
     if(res.ok){
       const data=await res.json();
       if(Array.isArray(data) && data.length>0) return data;
-    }
-    // fallback sem filtro de data pra pegar HOME e AWAY antigos também
-    url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=400';
-    res=await fetch(url,{headers});
-    if(res.ok){
-      const d2=await res.json();
-      if(Array.isArray(d2) && d2.length>0) return d2;
     }
     return null;
   }catch(e){ return null; }
@@ -110,6 +101,13 @@ async function fetchReal(){
       return false;
     }
     let newCount=0;
+    let distinctCount={HOME:0,AWAY:0,TIE:0};
+    // primeiro conta o que veio do Supabase pra debug
+    for(let r of data){
+      const raw = r.winner || r.result || r.outcome || '';
+      const n = normalizeWinner(raw);
+      if(n) distinctCount[n]++;
+    }
     for(let j=data.length-1;j>=0;j--){
       const row=data[j]; 
       const raw = row.winner || row.result || row.outcome || '';
@@ -117,7 +115,7 @@ async function fetchReal(){
       if(!norm) continue;
       if(!history.find(h=>h.round_id===row.id)){ if(addResult(norm,row)) newCount++; }
     }
-    botStatus='✅ LIVE - Vander Placar - '+history.length+'/400 - '+stats.HOME+'H '+stats.AWAY+'A '+stats.TIE+'T'+(newCount?(' +'+newCount):'');
+    botStatus='✅ LIVE - Vander Placar - '+history.length+'/400 - '+stats.HOME+'H '+stats.AWAY+'A '+stats.TIE+'T | Supabase:'+distinctCount.HOME+'H '+distinctCount.AWAY+'A '+distinctCount.TIE+'T'+(newCount?(' +'+newCount):'');
     isCollecting=false;
     return true;
   }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
@@ -299,4 +297,3 @@ app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,bot
 app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
 const PORT=process.env.PORT||10000;
 app.listen(PORT,()=>{ console.log('🚀 VANDER PLACAR 400 na porta '+PORT); start(); });
-    
