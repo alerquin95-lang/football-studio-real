@@ -1,13 +1,9 @@
 {
-  "name": "jokeria-cloud-vander",
-  "version": "2.0.0",
+  "name": "vander-premium-ia",
+  "version": "3.0.0",
   "type": "module",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
+  "scripts": { "start": "node index.js" },
   "dependencies": {},
-  "engines": {
-    "node": ">=18.0.0"
-  }
+  "engines": { "node": ">=18.0.0" }
 }
