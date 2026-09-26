@@ -1,5 +1,37 @@
 const http = require('http');
 const fs = require('fs');
+const https = require('https');
+
+// Polyfill fetch para Node <18 e garantir funcionamento
+if(typeof global.fetch === 'undefined'){
+  global.fetch = function(url, opts={}){
+    return new Promise((resolve, reject)=>{
+      const u = new URL(url);
+      const lib = u.protocol==='https:'?https:http;
+      const req = lib.request({
+        method: opts.method||'GET',
+        hostname: u.hostname,
+        path: u.pathname+u.search,
+        headers: opts.headers||{}
+      }, (res)=>{
+        let data='';
+        res.on('data', c=>data+=c);
+        res.on('end', ()=>{
+          resolve({
+            ok: res.statusCode>=200 && res.statusCode<300,
+            status: res.statusCode,
+            json: async ()=>{ try{return JSON.parse(data)}catch(e){return {}} },
+            text: async ()=>data
+          });
+        });
+      });
+      req.on('error', reject);
+      if(opts.body) req.write(opts.body);
+      req.end();
+    });
+  };
+}
+
 
 const SUPABASE_URL = 'https://ulzvxigcdcwbyfnpewjc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVsenZ4aWdjZGN3YnlmbnBld2pjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjc0NDM0MDUsImV4cCI6MjA0MzAxOTQwNX0.dxjQdE0uLsy1sKt8kL6xfBhqXyBb-dKW-UB_ikDOXx8';
@@ -336,14 +368,4 @@ const server = http.createServer(async function(req,res){
   }
   if(url.pathname==='/api/raw'){
     try{
-      let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-      let r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers:headers});
-      if(!r.ok && r.status===401){ await refreshTokenAuto(); headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'}; r=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20',{headers:headers}); }
-      const data=await r.json();
-      let distinct={};
-      for(let row of data){
-        const raw=row.winner || row.result || row.outcome || row.winning_side || 'NULL';
-        distinct[raw]=(distinct[raw]||0)+1;
-      }
-      res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({count:data.length, distinct:distinct, sample:data.slice(0,3), columns:data[0]?Object.keys(data[0]):[]}, null, 2));
-    }catch(e){ res.writeHead(2
+      let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABA
