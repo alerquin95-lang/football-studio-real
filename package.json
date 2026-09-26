@@ -1,6 +1,6 @@
 {
-  "name": "vander-premium-ia-g2",
-  "version": "3.0.1",
+  "name": "vander-placar-400-ia-g2-fix",
+  "version": "4.0.0",
   "main": "index.js",
   "scripts": { "start": "node index.js" },
   "dependencies": {},
