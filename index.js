@@ -59,37 +59,100 @@ async function refreshTokenAuto(){
   }catch(e){ lastError=e.message; return false; }
 }
 
-async function fetchReal(){
-  if(isCollecting) return;
-  isCollecting=true;
+
+const CANDIDATE_TABLES = [
+  'football_studio_rounds',
+  'football_studio_results',
+  'football_studio',
+  'studio_rounds',
+  'studio_results',
+  'football_results',
+  'results',
+  'rounds',
+  'bacbo_rounds',
+  'bac_bo_rounds',
+  'evolution_football_studio'
+];
+
+async function tryFetchTable(table){
   try{
+    const since = new Date(Date.now()-24*60*60*1000).toISOString();
     let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-    let res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?order=created_at.desc&limit=200',{headers});
+    // EXATAMENTE igual ao Joker: select=* & created_at >= ontem & order desc & limit 5000
+    let url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&created_at=gte.'+encodeURIComponent(since)+'&order=created_at.desc&limit=5000';
+    let res=await fetch(url,{headers});
     if(!res.ok){
       const txt=await res.text();
-      lastError=res.status+' '+txt.slice(0,150);
       if(res.status===401){
         const ok=await refreshTokenAuto();
         if(ok){
           headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
-          res=await fetch(SUPABASE_URL+'/rest/v1/football_studio_rounds?order=created_at.desc&limit=200',{headers});
-          if(!res.ok){ lastError=await res.text(); botStatus='Erro após renovar: '+res.status; isCollecting=false; return false; }
-        } else { botStatus='Token expirado, tentando em 10s'; isCollecting=false; return false; }
-      } else { botStatus='Erro Supabase: '+res.status; isCollecting=false; return false; }
+          res=await fetch(url,{headers});
+          if(!res.ok){ lastError='Tabela '+table+' - '+(await res.text()).slice(0,100); return null; }
+        } else return null;
+      } else {
+        if(res.status!==404) lastError='Tabela '+table+' - '+res.status+' '+txt.slice(0,80);
+        return null;
+      }
     }
     const data=await res.json();
-    if(!Array.isArray(data)||data.length===0){ botStatus='Aguardando dados do Joker...'; isCollecting=false; return false; }
+    if(Array.isArray(data) && data.length>0){
+      console.log('[TABELA OK] '+table+' -> '+data.length+' registros, exemplo:', JSON.stringify(data[0]).slice(0,200));
+      return data;
+    }
+    // tenta sem filtro de data se vazio
+    url = SUPABASE_URL+'/rest/v1/'+table+'?select=*&order=created_at.desc&limit=200';
+    res=await fetch(url,{headers});
+    if(res.ok){
+      const d2=await res.json();
+      if(Array.isArray(d2) && d2.length>0){
+        console.log('[TABELA OK SEM FILTRO] '+table+' -> '+d2.length);
+        return d2;
+      }
+    }
+    return null;
+  }catch(e){ console.log('[ERRO TABLE] '+table+' '+e.message); return null; }
+}
+
+async function fetchReal(){
+  if(isCollecting) return;
+  isCollecting=true;
+  try{
+    let data=null;
+    let usedTable=null;
+    for(let tbl of CANDIDATE_TABLES){
+      data=await tryFetchTable(tbl);
+      if(data){ usedTable=tbl; break; }
+    }
+    // se nao achou nada, tenta descobrir via /rest/v1/
+    if(!data){
+      try{
+        let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN};
+        let res=await fetch(SUPABASE_URL+'/rest/v1/',{headers});
+        if(res.ok){
+          const spec=await res.json();
+          console.log('[SPEC] Tabelas disponiveis:', Object.keys(spec.definitions||{}).slice(0,20));
+          lastError='Nenhuma tabela com dados. Spec: '+Object.keys(spec.definitions||{}).join(',').slice(0,200);
+        }
+      }catch(e){}
+      botStatus='Aguardando dados do Joker... nenhuma tabela retornou';
+      isCollecting=false;
+      return false;
+    }
+
     let newCount=0;
     for(let j=data.length-1;j>=0;j--){
-      const row=data[j]; const w=(row.winner||'').toString().toUpperCase();
+      const row=data[j]; 
+      const w=(row.winner||row.result||row.outcome||'').toString().toUpperCase();
       if(!['HOME','AWAY','TIE'].includes(w)) continue;
       if(!history.find(h=>h.round_id===row.id)){ if(addResult(w,row)) newCount++; }
     }
-    botStatus='✅ LIVE - Conectado ao Joker - '+history.length+' resultados';
+    botStatus='✅ LIVE - '+usedTable+' - '+history.length+' resultados'+(newCount?(' +'+newCount):'');
     isCollecting=false;
     return true;
   }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
 }
+
 
 async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 5000); setInterval(refreshTokenAuto, 1000*60*30); }
 
