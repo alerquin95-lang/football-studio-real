@@ -70,6 +70,7 @@ function normalizeWinner(raw){
   return null;
 }
 
+
 async function tryFetchTable(table){
   try{
     let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
@@ -84,10 +85,58 @@ async function tryFetchTable(table){
     }
     if(res.ok){
       const data=await res.json();
-      if(Array.isArray(data) && data.length>0) return data;
+      if(Array.isArray(data) && data.length>0){
+        // log distinct raw winners for debug
+        let distinctRaw = {};
+        for(let r of data.slice(0,20)){
+          const raw = r.winner || r.result || r.outcome || r.winning_side || r.side || 'NULL';
+          distinctRaw[raw]=(distinctRaw[raw]||0)+1;
+        }
+        console.log('[RAW SAMPLE]', JSON.stringify(data[0]).slice(0,500));
+        console.log('[DISTINCT RAW]', distinctRaw);
+        return data;
+      }
     }
     return null;
-  }catch(e){ return null; }
+  }catch(e){ lastError=e.message; return null; }
+}
+
+function inferWinnerFromRow(row){
+  // tenta todas as colunas possíveis
+  let raw = row.winner || row.result || row.outcome || row.winning_side || row.side || row.winningSide || '';
+  let norm = normalizeWinner(raw);
+  if(norm) return norm;
+  // tenta por scores
+  if(row.home_score!=null && row.away_score!=null){
+    if(Number(row.home_score) > Number(row.away_score)) return 'HOME';
+    if(Number(row.away_score) > Number(row.home_score)) return 'AWAY';
+    return 'TIE';
+  }
+  if(row.home!=null && row.away!=null){
+    if(Number(row.home) > Number(row.away)) return 'HOME';
+    if(Number(row.away) > Number(row.home)) return 'AWAY';
+    return 'TIE';
+  }
+  // tenta por cartas
+  if(row.home_card!=null && row.away_card!=null){
+    // Football Studio: carta maior vence
+    // se for string tipo "K", "Q", etc, converte valor
+    const val = (c)=>{
+      if(!c) return 0;
+      const s=c.toString().toUpperCase();
+      if(s.includes('A')) return 14;
+      if(s.includes('K')) return 13;
+      if(s.includes('Q')) return 12;
+      if(s.includes('J')) return 11;
+      return parseInt(s)||0;
+    };
+    const hv = val(row.home_card_value || row.home_card || row.home);
+    const av = val(row.away_card_value || row.away_card || row.away);
+    if(hv>av) return 'HOME';
+    if(av>hv) return 'AWAY';
+    return 'TIE';
+  }
+  return null;
 }
 
 async function fetchReal(){
@@ -101,27 +150,54 @@ async function fetchReal(){
       return false;
     }
     let newCount=0;
-    let distinctCount={HOME:0,AWAY:0,TIE:0};
-    // primeiro conta o que veio do Supabase pra debug
-    for(let r of data){
-      const raw = r.winner || r.result || r.outcome || '';
-      const n = normalizeWinner(raw);
-      if(n) distinctCount[n]++;
-    }
+    let debugCounts={raw:{}, norm:{HOME:0,AWAY:0,TIE:0,UNKNOWN:0}};
     for(let j=data.length-1;j>=0;j--){
-      const row=data[j]; 
-      const raw = row.winner || row.result || row.outcome || '';
-      const norm = normalizeWinner(raw);
-      if(!norm) continue;
-      if(!history.find(h=>h.round_id===row.id)){ if(addResult(norm,row)) newCount++; }
+      const row=data[j];
+      const raw = row.winner || row.result || row.outcome || row.winning_side || row.side || 'NULL';
+      debugCounts.raw[raw]=(debugCounts.raw[raw]||0)+1;
+      const norm = inferWinnerFromRow(row) || normalizeWinner(raw);
+      if(norm){
+        debugCounts.norm[norm]=(debugCounts.norm[norm]||0)+1;
+        if(!history.find(h=>h.round_id===row.id)){
+          if(addResult(norm,row)) newCount++;
+        }
+      } else {
+        debugCounts.norm.UNKNOWN++;
+        // log row que não conseguiu inferir
+        if(debugCounts.norm.UNKNOWN<3) console.log('[UNKNOWN ROW]', JSON.stringify(row).slice(0,500));
+      }
     }
-    botStatus='✅ LIVE - Vander Placar - '+history.length+'/400 - '+stats.HOME+'H '+stats.AWAY+'A '+stats.TIE+'T | Supabase:'+distinctCount.HOME+'H '+distinctCount.AWAY+'A '+distinctCount.TIE+'T'+(newCount?(' +'+newCount):'');
+    console.log('[FETCH DEBUG]', debugCounts);
+    botStatus='✅ LIVE - '+history.length+'/400 - '+stats.HOME+'H '+stats.AWAY+'A '+stats.TIE+'T | RAW:'+JSON.stringify(debugCounts.raw).slice(0,100)+(newCount?(' +'+newCount):'');
     isCollecting=false;
     return true;
-  }catch(e){ lastError=e.message; botStatus='Erro: '+e.message; isCollecting=false; return false; }
+  }catch(e){ lastError=e.message; console.log('[FETCH ERROR]', e); botStatus='Erro: '+e.message; isCollecting=false; return false; }
 }
 
+
 async function start(){ loadHistory(); await fetchReal(); setInterval(fetchReal, 5000); setInterval(refreshTokenAuto, 1000*60*30); }
+
+
+app.get('/api/raw', async(req,res)=>{
+  try{
+    let headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'};
+    let url = SUPABASE_URL+'/rest/v1/football_studio_rounds?select=*&order=created_at.desc&limit=20';
+    let r=await fetch(url,{headers});
+    if(!r.ok && r.status===401){ await refreshTokenAuto(); headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_AUTH_TOKEN,'Content-Type':'application/json'}; r=await fetch(url,{headers}); }
+    const data=await r.json();
+    let distinct={};
+    let sample = data.slice(0,5);
+    for(let row of data){
+      const raw = row.winner || row.result || row.outcome || row.winning_side || 'NULL';
+      distinct[raw]=(distinct[raw]||0)+1;
+    }
+    res.json({count:data.length, distinct, sample, columns: data[0]?Object.keys(data[0]):[]});
+  }catch(e){ res.json({error:e.message}); }
+});
+
+app.get('/api/debugfull', async(req,res)=>{
+  res.json({history: history.slice(0,10), stats, botStatus, error:lastError, total:history.length});
+});
 
 app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
 app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
@@ -270,30 +346,4 @@ async function loadData(){
     if(chart1) chart1.destroy();
     chart1 = new Chart(document.getElementById('distChart'), {
       type:'doughnut',
-      data:{ labels:['HOME','AWAY','TIE'], datasets:[{ data:[s.HOME,s.AWAY,s.TIE], backgroundColor:['#ef4444','#3b82f6','#eab308'], borderWidth:0 }] },
-      options:{ plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}, cutout:'65%' }
-    });
-    const last50 = rRounds.data.slice(0,50).reverse();
-    if(chart2) chart2.destroy();
-    chart2 = new Chart(document.getElementById('timelineChart'), {
-      type:'bar',
-      data:{
-        labels:last50.map((_,i)=>i+1),
-        datasets:[{ data:last50.map(r=>r.winner==='HOME'?2:r.winner==='AWAY'?1:0.5), backgroundColor:last50.map(r=>r.winner==='HOME'?'#ef4444':r.winner==='AWAY'?'#3b82f6':'#eab308'), borderRadius:4 }]
-      },
-      options:{ plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} }
-    });
-  }catch(e){}
-}
-loadData();
-setInterval(loadData, 5000);
-</script>
-</body></html>`;
-
-  res.send(html);
-});
-
-app.get('/api/rounds',(req,res)=>res.json({success:true,count:history.length,botStatus,data:history,error:lastError}));
-app.get('/api/stats',(req,res)=>res.json({success:true,stats,total:history.length,botStatus,error:lastError}));
-const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>{ console.log('🚀 VANDER PLACAR 400 na porta '+PORT); start(); });
+      data:{ labels:['HOME','AWAY','TIE'], datasets:[{ data:[s.HOME,s.AWAY,s.TIE], backgroun
