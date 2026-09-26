@@ -1,7 +1,6 @@
 {
-  "name": "vander-premium-ia",
-  "version": "3.0.0",
-  "type": "module",
+  "name": "vander-premium-ia-g2",
+  "version": "3.0.1",
   "main": "index.js",
   "scripts": { "start": "node index.js" },
   "dependencies": {},
