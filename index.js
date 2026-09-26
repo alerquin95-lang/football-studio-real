@@ -7,12 +7,29 @@ const A1='[STRIPPED 127 bytes].';
 const A2='dxjQdE0uLsy1sKt8kL6xfBhqXyBb-dKW-UB_ikDOXx8';
 const ANON=A0+A1+A2;
 
-const B0='[STRIPPED 96 bytes].';
-const B1='[STRIPPED 72 bytes]';
-const B2='[STRIPPED 72 bytes]';
-const B3='5OTc2NDgsImV4cCI6MTc1OTAwMTI0OH0.';
-const B4='4s7c5w4fK7h7L3m2N1p9Q8r7S6t5U4v3W2x1Y0Z';
-let TOKEN=B0+B1+B2+B3+B4;
+const B0='eyJhbGciOiJFUzI1NiIsImtpZCI6ImRkZmZhM2QzLTEyYmItNG';
+const B1='ZjZi1hZGIxLTJjNGNiMTgxNzNlZCIsInR5cCI6IkpXVCJ9.eyJ';
+const B2='pc3MiOiJodHRwczovL3VsenZ4aWdjZGN3YnlmbnBld2pjLnN1c';
+const B3='GFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZDExNDMxYi01NzR';
+const B4='mLTQwMmEtODIyYi0yZjQ1YzE2NzMwMmQiLCJhdWQiOiJhdXRoZ';
+const B5='W50aWNhdGVkIiwiZXhwIjoxNzkwNDI5NTAwLCJpYXQiOjE3OTA';
+const B6='0MjU5MDAsImVtYWlsIjoic2FudGFyb3NhdmFuZGVyQGdtYWlsL';
+const B7='mNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3Z';
+const B8='pZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sI';
+const B9='nVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJzYW50YXJvc2F2YW5';
+const B10='kZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsI';
+const B11='mZ1bGxfbmFtZSI6IlZhbmRlciBOYXNjaW1lbnRvIFNhbnRhIFJ';
+const B12='vc2EiLCJwaG9uZSI6IiszNTE5Mjk0NDY0MjkiLCJwaG9uZV9jb';
+const B13='3VudHJ5X2NvZGUiOiIrMzUxIiwicGhvbmVfdmVyaWZpZWQiOmZ';
+const B14='hbHNlLCJyZWZlcnJhbF9jb2RlIjoid3BwIiwic3ViIjoiM2QxM';
+const B15='TQzMWItNTc0Zi00MDJhLTgyMmItMmY0NWMxNjczMDJkIn0sInJ';
+const B16='vbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtc';
+const B17='iI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE';
+const B18='3ODk5OTY2MTV9XSwic2Vzc2lvbl9pZCI6Ijc5MjVkMTA2LWI1N';
+const B19='zQtNDAwNi1iNmM3LTg0NDFjYzU0MWY4OCIsImlzX2Fub255bW9';
+const B20='1cyI6ZmFsc2V9.TJef0QdVhjkcaEiEKci95bARRFPUlkqwlWKQ';
+const B21='fsYNuqkjK5ge4FGzjpCJx3RDv3JOxhyXGvB0-RcA8xAU__b6EA';
+let TOKEN=B0+B1+B2+B3+B4+B5+B6+B7+B8+B9+B10+B11+B12+B13+B14+B15+B16+B17+B18+B19+B20+B21;
 
 const USER='santarosavander@gmail.com';
 const PASS='131619jV*';
@@ -502,7 +519,4 @@ server.listen(PORT, async ()=>{
   console.log('VANDER 400 IA G2 PULA 2 na porta '+PORT);
   load();
   await fetchReal();
-  setInterval(fetchReal,5000);
-  setInterval(refresh,1000*60*30);
-});
-      
+  setInterval(fetchR
